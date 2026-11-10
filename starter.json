@@ -1,0 +1,21 @@
+{
+  "name": "Secret Word Duel",
+  "genre": "word",
+  "dim": "2D",
+  "mode": "Versus",
+  "players": "2",
+  "hook": "Pick a secret word. Crack theirs first.",
+  "how": "Each player picks a secret 5-letter word, then you take turns guessing the other's. Green is the right letter in the right spot, yellow is in the word somewhere, grey is not in it; fewest guesses wins.",
+  "controls": "Type or tap the on-screen keyboard, Enter to guess",
+  "uses": [
+    ["Hidden info", "Your word is sealed so only you can read it (the host checks the clues, so it can too)."],
+    ["Host-run rules", "The host's browser checks every guess and works out the clues; if it leaves, the next player takes over."],
+    ["Bots", "A bot rival takes the empty seat, and a friend who joins takes it at the next pick."],
+    ["Leaderboard", "Duels won, shown after every duel."]
+  ],
+  "ideas": [
+    "Make the words 6 letters long",
+    "Add a hint button that costs one guess",
+    "Use only animal names as secret words"
+  ]
+}

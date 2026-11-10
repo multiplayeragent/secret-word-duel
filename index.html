@@ -1,0 +1,827 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Secret Word Duel</title>
+<style>
+  :root { --bg: #14122b; --ink: #f4f1ff; --dim: #a39fc6; --line: #3c3863; --tile: #201d40; --green: #3fbf6b; --yellow: #e6b437; --grey: #4b4868;
+          --me: #4cc3ff; --rival: #ff8a5c; --t: 48px; --m: 28px; --gap: 5px; }
+  html, body { margin: 0; height: 100%; overflow: hidden; overscroll-behavior: none; }
+  body { background: radial-gradient(900px 600px at 0% 0%, #2c2266, transparent 60%), radial-gradient(800px 600px at 100% 100%, #4a1f3f, transparent 60%), var(--bg);
+         color: var(--ink); font: 15px/1.3 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; user-select: none; -webkit-user-select: none; touch-action: manipulation; }
+  [hidden] { display: none !important; }
+  #app { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; gap: 6px; box-sizing: border-box;
+         padding: max(8px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left)); }
+  header { width: 100%; max-width: 760px; display: flex; align-items: center; gap: 10px; min-height: 40px; }
+  header h1 { margin: 0; font-size: 18px; font-weight: 900; letter-spacing: .02em; white-space: nowrap; }
+  header h1 b { color: var(--yellow); }
+  #name { margin-left: auto; width: 130px; height: 36px; border-radius: 10px; border: 1px solid #ffffff33; background: #ffffff12; color: #fff; padding: 0 10px; font: inherit; font-size: 16px; }
+  #status { width: 100%; max-width: 760px; text-align: center; font-weight: 800; font-size: clamp(15px, 2.6vw, 19px); min-height: 1.3em; }
+  #status .me { color: var(--me); } #status .rival { color: var(--rival); }
+  #timer { width: min(260px, 60vw); height: 5px; margin: 5px auto 0; border-radius: 3px; background: #ffffff1c; overflow: hidden; }
+  #timer i { display: block; height: 100%; background: var(--yellow); transform-origin: left; }
+  #arena { flex: 1; min-height: 0; width: 100%; display: flex; justify-content: center; align-items: center; gap: 10px; position: relative; }
+  .side { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+  .who, .secret { width: 0; min-width: 100%; } /* the board sets each side's width; labels never widen it */
+  .who { font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center; }
+  .who .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; vertical-align: 0; }
+  .side.turn .who { color: #fff; }
+  .side.turn .grid { box-shadow: 0 0 0 2px #ffffff40, 0 0 26px #ffffff1c; }
+  .grid { display: flex; flex-direction: column; gap: var(--gap); padding: 6px; border-radius: 12px; background: #0000002e; transition: box-shadow .3s; }
+  .row { display: flex; gap: var(--gap); }
+  .tile { --s: var(--t); --c: var(--tile); width: var(--s); height: var(--s); box-sizing: border-box; border: 2px solid var(--line); border-radius: calc(var(--s) * .14);
+          display: grid; place-items: center; font-weight: 900; font-size: calc(var(--s) * .56); text-transform: uppercase; background: var(--tile); color: #fff; }
+  .mini .tile { --s: var(--m); }
+  .tile.on { border-color: #8e88c2; }
+  .tile.g { --c: var(--green); } .tile.y { --c: var(--yellow); } .tile.b { --c: var(--grey); }
+  .tile.g, .tile.y, .tile.b { background: var(--c); border-color: var(--c); }
+  .tile.flip { animation: flip .46s ease both; animation-delay: calc(var(--i) * 110ms); }
+  @keyframes flip { 0% { transform: rotateX(0); background: var(--tile); border-color: #8e88c2; } 49% { transform: rotateX(90deg); background: var(--tile); border-color: #8e88c2; }
+                    50% { transform: rotateX(90deg); background: var(--c); border-color: var(--c); } 100% { transform: rotateX(0); background: var(--c); border-color: var(--c); } }
+  .tile.pop { animation: pop .12s ease-out; } @keyframes pop { 50% { transform: scale(1.12); } }
+  .tile.dots::after { content: "•"; color: #8e88c2; }
+  .row.think .tile { animation: think 1.2s ease-in-out infinite; animation-delay: calc(var(--i) * 120ms); } @keyframes think { 50% { border-color: #b8b2e8; transform: translateY(-2px); } }
+  .row.time .tile { border-style: dashed; font-size: calc(var(--s) * .3); color: var(--dim); }
+  .row.shake { animation: shake .36s; } @keyframes shake { 20%, 60% { transform: translateX(-7px); } 40%, 80% { transform: translateX(7px); } }
+  .row.won .tile { animation: hop .5s ease both; animation-delay: calc(.6s + var(--i) * 90ms); } @keyframes hop { 40% { transform: translateY(-30%); } }
+  .secret { display: flex; flex-wrap: wrap; gap: 3px; justify-content: center; font-size: 10.5px; font-weight: 800; color: var(--dim); letter-spacing: .05em; text-transform: uppercase; }
+  .secret span { flex-basis: 100%; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .secret .tile { --s: max(18px, calc(var(--m) * .9)); border-width: 1.5px; }
+  .secret .tile.found { --c: var(--green); background: var(--c); border-color: var(--c); }
+  .secret .tile.hidden { color: transparent; }
+  #vs { align-self: center; margin-top: 30px; width: 38px; height: 38px; flex: none; border-radius: 50%; display: grid; place-items: center; font-weight: 900; font-size: 13px;
+        background: linear-gradient(135deg, var(--me), var(--rival)); color: #14122b; box-shadow: 0 4px 14px #0007; }
+  #pick { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; text-align: center; padding: 0 10px; }
+  #pick h2 { margin: 0; font-size: clamp(22px, 4.5vw, 32px); } #pick p { margin: 0; color: var(--dim); max-width: 420px; }
+  #pick .row .tile { --s: min(64px, 16vw); }
+  .btns { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  button.go, .btns button { min-height: 46px; border: 0; border-radius: 12px; padding: 0 18px; font: 800 16px system-ui, sans-serif; cursor: pointer; background: #ffffff1e; color: #fff; }
+  .btns button.main, button.go { background: var(--green); color: #062512; }
+  .btns button:disabled { opacity: .4; cursor: default; }
+  #pickStatus { font-weight: 700; color: var(--dim); min-height: 1.3em; }
+  #hint { max-width: 560px; text-align: center; font-size: 13px; color: var(--dim); min-height: 1.2em; padding: 0 6px; }
+  #kbd { width: 100%; max-width: 560px; display: flex; flex-direction: column; gap: 6px; }
+  #kbd .kr { display: flex; gap: 5px; justify-content: center; }
+  #kbd button { flex: 1; max-width: 46px; height: var(--kh, 50px); border: 0; border-radius: 7px; background: #3a3762; color: #fff; font: 800 16px system-ui, sans-serif; text-transform: uppercase; padding: 0; cursor: pointer; touch-action: manipulation; }
+  #kbd button.wide { max-width: 72px; flex: 1.5; font-size: 13px; }
+  #kbd button.g { background: var(--green); } #kbd button.y { background: var(--yellow); } #kbd button.b { background: #26243f; color: #8d89ad; }
+  #net { font-size: 12px; color: var(--dim); opacity: .85; min-height: 1em; }
+  #fx { position: fixed; inset: 0; pointer-events: none; z-index: 30; }
+  #toast { position: fixed; left: 50%; top: 22%; transform: translateX(-50%); background: #f4f1ff; color: #14122b; font-weight: 800; padding: 8px 16px; border-radius: 10px; z-index: 25; pointer-events: none; transition: opacity .3s; }
+  #over { position: fixed; inset: 0; display: grid; place-items: center; background: #0b0a1cc4; padding: 12px; z-index: 20; }
+  .card { width: min(380px, calc(100vw - 32px)); max-height: 94vh; overflow: auto; box-sizing: border-box; background: #221f45; border: 1px solid #ffffff22; border-radius: 20px; padding: 18px; text-align: center; box-shadow: 0 20px 60px #0009; }
+  .card h2 { margin: 0 0 4px; font-size: 28px; } .card p { margin: 0 0 10px; color: var(--dim); }
+  .words { display: flex; flex-direction: column; gap: 8px; align-items: center; margin: 6px 0 10px; }
+  .words .wl { font-size: 12px; font-weight: 800; color: var(--dim); text-transform: uppercase; letter-spacing: .06em; }
+  .words .row .tile { --s: 34px; }
+  .card h3 { margin: 6px 0 0; font-size: 13px; color: var(--yellow); text-align: left; }
+  .card ol { text-align: left; padding-left: 26px; margin: 6px 0 12px; font-size: 14px; min-height: 30px; } .card li span { float: right; }
+  #oNext { color: var(--dim); font-size: 13px; margin-top: 6px; }
+  @media (max-width: 520px) { header h1 { font-size: 16px; } #name { width: 104px; } #vs { width: 30px; height: 30px; font-size: 11px; } #arena { gap: 6px; } }
+</style>
+<script src="https://cdn.multiplayeragent.com/sdk/mp.global.js"></script>
+</head>
+<body>
+<div id="app">
+  <header><h1>Secret <b>Word</b> Duel</h1><input id="name" maxlength="14" placeholder="Your name" aria-label="Your name"></header>
+  <div id="status"><span id="stText">Connecting…</span><div id="timer"><i></i></div></div>
+  <div id="arena">
+    <section class="side" id="sideL"><div class="who"></div><div class="secret"></div><div class="grid"></div></section>
+    <div id="vs">VS</div>
+    <section class="side" id="sideR"><div class="who"></div><div class="secret"></div><div class="grid"></div></section>
+    <div id="pick" hidden>
+      <h2 id="pickTitle">Pick your secret word</h2>
+      <p id="pickSub"></p>
+      <div class="row" id="pickRow"></div>
+      <div class="btns" id="pickBtns"><button id="rand">Random word</button><button id="lock" class="main">Lock it in</button></div>
+      <div id="pickStatus"></div>
+    </div>
+  </div>
+  <div id="hint"></div>
+  <div id="kbd"></div>
+  <div id="net"></div>
+</div>
+<div id="toast" style="opacity:0"></div>
+<canvas id="fx"></canvas>
+<div id="over" hidden><div class="card">
+  <h2 id="oTitle"></h2><p id="oSub"></p>
+  <div class="words" id="oWords"></div>
+  <h3>Most duels won</h3><ol id="board"><li>Loading…</li></ol>
+  <button class="go" id="again">Play again</button><div id="oNext"></div>
+</div></div>
+<script>
+/* ═══ SECRET WORD DUEL · a Multiplayer Agent starter ══════════════════════════════════════
+ * Pick a secret word. Crack theirs first. Versus, 2 players; a bot takes an empty seat.
+ *
+ * WHERE THINGS ARE (search for the "── " headers):
+ *   CONFIG ........ guesses, timers, how the bot plays, the leaderboard
+ *   WORDS ......... the word list (bots pick from COMMON; any word in either list is a valid
+ *                   guess), and score(): the green / yellow / grey clue for a guess
+ *   CONNECTION .... MP_CONNECT, joining, the offline room, who is host
+ *   SEALED SECRETS  the Seal helper: your word is encrypted so only you (and the host) can read it
+ *   DUEL (HOST) ... seats, the pick phase, checking guesses, whose turn, who won, the bot,
+ *                   and taking over as a new host. Only the host writes the shared fields.
+ *   ME ............ typing, picking and locking my word, guessing, re-sending to a new host
+ *   SCREEN ........ the two boards, my secret, the keyboard, flips, confetti, sounds
+ *   RESULTS ....... the duel-over card and the leaderboard
+ *
+ * HOW THE MULTIPLAYER WORKS (a relay room: no server code):
+ *   - The duel lives in shared fields only the HOST writes: `game` (one JSON field: id, v,
+ *     phase, seats, who went first, turn, every guess with its clue, timers, the winner) and
+ *     `secrets` (each human's own word, SEALED to that player, proving the host has it).
+ *   - The HOST is the lowest sessionId among live players (heartbeat seen in the last 3s).
+ *     It keeps both secret words in memory and works out every clue, so nobody else ever
+ *     sees a word until the duel ends. (The host can read them: fine for friends.)
+ *   - Each player writes its OWN entity: `n` (name), `c` (color), `pk` (public key), `hb`,
+ *     and `ty` (how many letters it has typed, so the rival sees dots fill in).
+ *   - Intents to the host: "word" {to, g, box} (my secret, sealed to the host), "guess"
+ *     {g, t, w}, "again" {g}. `t` counts every guess, so an old or double intent is ignored.
+ *   - When the host changes, each player re-sends its word sealed to the new host. A bot's word
+ *     is lost with the old host, so the new host picks one that fits every clue given so far.
+ *   - Timers are timestamps in `game`: pick ends at endsAt, each turn at turnEnds.
+ *   - ?attract plays offline: two bots duel (the preview video is recorded from it).
+ *   - Leaderboard "duel-wins": +1 for each duel a player wins, shown after every duel.
+ */
+
+// ── CONFIG ──────────────────────────────────────────────────────────────────────────
+const CONFIG = {
+  maxGuesses: 6,             // guesses each; if nobody cracks it in this many, it's a draw
+  pickMs: 45000,             // time to pick a secret word (then the host picks one for you)
+  turnMs: 60000,             // time per guess; run out and that guess is lost
+  startMs: 1400,             // the "Duel!" moment before the first guess
+  botPickMs: [1500, 4000],   // how long a bot takes to pick its word
+  botMs: [2500, 5500],       // how long a bot thinks per guess
+  botSloppy: 0.35,           // chance a bot's guess only respects its green letters (keeps it beatable)
+  overMs: 15000,             // the results card shows this long, then the next duel starts
+  seatGraceMs: 8000,         // a player silent this long hands its seat to a bot
+  rejoinMs: 3000,            // a new host waits this long for players to re-send their words
+  board: "duel-wins",        // leaderboard name
+};
+const BOT_NAMES = ["Wordsworth", "Lexi", "Scrabbles", "Vowelina", "Inkwell", "Quill"];
+const COLORS = ["#4cc3ff", "#ff8a5c", "#c792ff", "#4ee08a", "#ffd23f", "#ff6fae"];
+const NAME_A = ["Clever", "Sneaky", "Lucky", "Quick", "Witty", "Brave"], NAME_B = ["Owl", "Fox", "Panda", "Otter", "Raven", "Lynx"];
+
+// ── WORDS ───────────────────────────────────────────────────────────────────────────
+// COMMON: everyday words a bot may pick as its secret. EXTRA: more words you may guess or pick.
+// Add words to either list (lowercase, 5 letters, separated by spaces).
+const COMMON = `
+about above actor adapt adopt adult after again agent agree ahead alarm album alert alien alike alive allow alone along alter amber
+angel anger angle angry ankle apart apple apply apron arena argue arise armor arrow aside atlas attic audio avoid awake award aware
+bacon badge baker basic beach beard beast begin being belly bench berry birth black blade blame blank blast blaze blend blind blink
+block blood bloom board boast bonus boost booth brain brake brand brave bread break brick bride brief bring broad broke brook broom
+brown brush buddy build bunch bunny burst cabin cable camel candy canoe cargo carry catch cause cedar chain chair chalk charm chart
+chase cheap check cheek cheer chess chest chick chief child chill chirp choir chunk cider claim clash class clean clear click cliff
+climb clock close cloth cloud clown coach coast cocoa color comet comic coral couch cough count cover crack craft crane crash crate
+crawl crazy cream creek crisp crowd crown crumb crush crust curly curve cycle daily dairy daisy dance delay delta dense depth diary
+digit diner dirty disco dizzy dodge donut dough dozen draft drain drama drawn dream dress drift drill drink drive drone dusty dwarf
+eager eagle early earth easel eight elbow elder email empty enemy enjoy enter entry equal error essay event every exact extra fable
+faint fairy faith false fancy feast fence ferry fever field fifty fight final first flake flame flash flask fleet float flock flood
+floor flour fluid flute focus foggy force forge forty found frame fresh fried front frost frown fruit fudge funny fuzzy ghost giant
+given glass globe glove gnome goose grace grade grain grand grape graph grass grave gravy great green greet grill grind group grove
+growl guard guess guest guide habit hairy handy happy harsh hatch haunt heart heavy hedge hello hippo hobby honey honor horse hotel
+hound house hover human humid humor hurry icing ideal igloo image index inner input issue ivory jeans jelly jewel joint joker jolly
+judge juice juicy jumbo kayak knife knock koala label ladle large laser later laugh layer leafy learn least leave lemon level lever
+light lilac limit liner llama lobby local lodge logic loose lotus lucky lunar lunch magic major maker mango maple march match mayor
+medal melon mercy merry messy metal meter minor mixer model money month moose motor mound mount mouse mouth movie muddy music naval
+nerve never night ninja noble noise north novel nurse ocean offer often olive onion opera orbit order organ other otter outer owner
+paint panda panel panic paper party pasta patch pause peace peach pearl pedal penny perch petal phone photo piano piece pilot pinch
+pitch pixel pizza place plain plane plant plate plaza point polar poppy porch pouch power press price pride prime print prize proof
+proud puppy purse quack queen quest quick quiet quilt quite quote radar radio rainy raise ranch range rapid raven reach ready rebel
+relax reply rhino rider ridge right river roast robin robot rocky rodeo rough round route royal ruler rusty salad salty sandy sauce
+scale scarf scary scene scent scoop score scout screw seven shade shady shake shape share shark sharp sheep sheet shelf shell shine
+shiny shirt shock shore short shout shrub sight silly siren skate skill skirt skull sleep slice slide slime slope sloth small smart
+smell smile smoke snack snail snake sneak snowy solar solid solve sound south space spare spark speak speed spell spend spice spicy
+spike spill spoon sport spray squad squid stack stage stair stamp stand start state steak steam steel stick still sting stone stool
+storm story stove straw stuck study stuff style sugar sunny super swamp sweet swift swing sword table tasty teach teddy teeth thank
+thick thief thing think third thorn three throw thumb tiger timer toast today tooth torch total touch tough towel tower track trade
+trail train treat trend trick truck trunk trust truth tulip twist uncle under unite until upper urban usual valid value vapor video
+visit vital vivid voice wagon waist waltz watch water weave whale wheat wheel while whisk white whole witch woman world worry worth
+wrist write wrong yacht yeast young youth yummy zebra`.trim().split(/\s+/);
+const EXTRA = `
+aback abbey abort abuse acorn acute adieu admit adore affix agile aglow aisle algae alley aloft amaze amend among ample amuse angst
+anvil arbor aroma ascot ashen asset atone audit avail avert await awful axiom badly bagel baggy basin batch baton bayou beefy below
+beret bingo bison bland bleak bleed bless bloat blond blown bluff blunt blurb blurt blush bossy botch bough bound boxer brass brawl
+breed brine brink brisk broil broth brunt budge buggy bugle built bulky bully burly buyer cache cadet caper carol carve caste cater
+cello chant cheat chili china chomp chord chore chose cinch civic civil clamp clank clasp clerk cling clove cluck clump colon could
+court crank creak creep crepe crest crime crimp croak crook cross crude cruel crypt cubic cumin curio cutie dandy dated dealt death
+debit debut decal decay decoy deity depot devil dimly ditch ditto diver dogma doing donor doubt dowel drank drape drawl dread dried
+droll drool droop drown dryer dunce eaten ebony eerie egret elect elfin elite elope elude embed ember enact endow epoch equip erase
+erupt evade evict evoke exalt excel exile exist expel facet fatal fault favor feign fetch fiber fiend fiery fifth filth finch flair
+flank flare flaky fleck flesh flick fling flint flirt flora floss flung flush foamy folly foray forgo forth forum freak frill frisk
+frond froth froze fully gamer gauge gaudy gecko genre giddy gizmo glare glaze gleam glide glint gloat gloom glory gloss goofy gorge
+gouge gourd grant grasp grate graze greed grief grimy gripe groan groom gross grown gruel gruff grunt guilt guise gulch gully gumbo
+gummy gusty hardy haste hasty haven hazel heist helix heron hinge hitch hoist holly hotly howdy hunch husky hyena idiom imply inbox
+inept inert infer ingot inlet irate irony itchy jaunt jazzy jerky jiffy jumpy karma kebab kiosk knack knead kneel knelt known kudos
+labor lance lapse lasso latch lease leapt ledge legal liken limbo linen lingo liver lofty lorry loved lover lower loyal lucid lumpy
+lunge lurch lying macaw madam mania manor marsh mason maxim media merit midst might mince minus mirth miser mocha modem moist molar
+moldy moral mossy motif motto mourn mower mulch mural murky mushy musty nacho naive nanny nasty nerdy newer nifty nomad notch nudge
+nutty nylon oasis occur oddly omega onset optic orate ought ounce outdo overt owing oxide ozone paddy pansy parka paste patio pecan
+penne peril perky pesky pesto petty phase phony picky pinky piper pivot plaid plank plead pleat plume plump plunk plush poker polka
+pooch pound prank preen prior prism probe prone prong prose prove prowl prune pulse punch pupil purge quail qualm query quirk quota
+rally ramen ratio razor react realm recap refer reign relay relic remix renew repay resin retro rhyme rigid rinse ripen risky rival
+rivet rogue roomy rouge rowdy rugby rumor rural sable sadly saint salon salsa sauna savor savvy scald scamp scant scone scope scorn
+scowl scrap scrub scuba sedan seedy seize sense serve setup shack shaft shall shame shard shave shear sheen sheer shift shone
+showy shown shred shrug shunt siege sieve sigma silky since sinew singe sixth sixty slack slang slant slash slate sleek sleet slept
+slick sling slump slurp smack smash smear smirk smith snare snarl sneer sniff snore snout sober sonar sonic sorry spade spawn spear
+speck spent spine spire spite splat spoke spook spool spore spout sprig spurt squat staff stain stake stale stalk stall stare
+stark stash steep steer stern stiff stilt stink stock stomp stood stoop stout strap stray strip strut stump stung stunk stunt suave
+suite sulky surge swarm swear sweat sweep swept swirl swish swoop syrup tabby taboo taffy tango taper tapir tardy tarot taunt tawny
+tease tempo tense tenth tepid terse theme there these those threw thump thyme tiara tidal tight timid tired title token tonic topaz
+topic totem toxic trace tramp trash trawl tread trial tribe tried trite troll troop trout truce truly tubby tuner tweak twice twine
+twirl ultra umbra unify union unity unzip upset usage usher utter vague valve vault vegan venom venue verse vicar vigor vinyl viola
+viper viral virus visor vista vixen vocal vouch voter wacky wafer waste waver weary wedge weird whack where which whiff whine whirl
+whose widen width wield wince winch windy wispy woken woody wordy worse worst would wound woven wrath wreck wrote yearn yield zesty`.trim().split(/\s+/);
+const ALL = new Set([...COMMON, ...EXTRA]);
+const OPENERS = ["crane", "slate", "trace", "stare", "arise", "raise", "audio", "house", "plant", "heart", "least", "coast"];
+/** The clue for a guess against a secret: "g" right spot, "y" in the word elsewhere, "b" not in it. */
+function score(guess, secret) {
+  const out = ["b", "b", "b", "b", "b"], left = {};
+  for (let i = 0; i < 5; i++) { if (guess[i] === secret[i]) out[i] = "g"; else left[secret[i]] = (left[secret[i]] || 0) + 1; }
+  for (let i = 0; i < 5; i++) if (out[i] !== "g" && left[guess[i]]) { out[i] = "y"; left[guess[i]]--; }
+  return out.join("");
+}
+const SOLVED = "ggggg", TIMEOUT = ".....";
+
+// ── CONNECTION ──────────────────────────────────────────────────────────────────────
+// The builder fills these in for this game. Downloaded from GitHub? Put your own pk_ key here.
+const MP_CONNECT = {
+  key: 'pk_REPLACE_ME',
+  room: 'secret-word-duel',
+  endpoint: 'wss://live.multiplayeragent.com',
+  apiUrl: 'https://api.multiplayeragent.com',
+};
+const ATTRACT = new URLSearchParams(location.search).has("attract");
+
+/** Same shape as the SDK client, kept in this tab: offline play and ?attract. */
+function localRoom() {
+  const id = "local", state = { entities: { players: { [id]: {} } }, shared: {} }, subs = [];
+  let queued = false;
+  const emit = () => { if (!queued) { queued = true; queueMicrotask(() => { queued = false; subs.forEach((f) => f(state)); }); } };
+  const put = (o, k, v) => { if (typeof k === "object") Object.assign(o, k); else o[k] = v; emit(); };
+  return {
+    sessionId: id, state, offline: true,
+    me: { set: (k, v) => put(state.entities.players[id], k, v) },
+    setShared: (k, v) => put(state.shared, k, v),
+    onState: (f) => { subs.push(f); f(state); }, onJoin() {}, onLeave() {}, on() {}, send() {},
+    onDisconnect() {}, onReconnect() {}, leave: async () => {},
+  };
+}
+async function connect() {
+  if (ATTRACT || typeof MP === "undefined") return localRoom();
+  try {
+    const mp = await Promise.race([MP.join({ ...MP_CONNECT }), new Promise((_, no) => setTimeout(() => no(new Error("timed out")), 10000))]);
+    window.mp = mp; // the builder calls window.mp.leave() when the page closes
+    return mp;
+  } catch (e) {
+    console.warn("Playing offline:", e && e.message);
+    return localRoom();
+  }
+}
+const parse = (v, fb) => { if (typeof v !== "string") return fb; try { return JSON.parse(v); } catch { return fb; } };
+let net = null, S = { entities: { players: {} }, shared: {} };
+const seenHb = new Map();
+/** Players whose heartbeat moved in the last 3s (plus us), sorted by sessionId. */
+function livePlayers() {
+  const now = performance.now(), out = [];
+  for (const [id, p] of Object.entries(S.entities.players || {})) {
+    const s = seenHb.get(id);
+    if (!s || s.hb !== p.hb) seenHb.set(id, { hb: p.hb, at: now });
+    if (id === net.sessionId || now - seenHb.get(id).at < 3000) out.push(id);
+  }
+  return out.sort();
+}
+const isHost = () => livePlayers()[0] === net.sessionId;
+const humans = () => livePlayers().filter((id) => !(ATTRACT && id === net.sessionId));
+/** Still in the room and heard from within the seat grace time. */
+const stillHere = (id) => id === net.sessionId || (!!S.entities.players[id] && performance.now() - (seenHb.get(id)?.at ?? -1e9) < CONFIG.seatGraceMs);
+const playerName = (id) => (id === net.sessionId ? myName : String(S.entities.players[id]?.n || "Player")).slice(0, 14);
+const playerColor = (id) => (id === net.sessionId ? myColor : S.entities.players[id]?.c || "#ccc");
+const pkOf = (id) => (id === net.sessionId ? Seal.pub : S.entities.players[id]?.pk);
+
+// ── SEALED SECRETS ──────────────────────────────────────────────────────────────────
+// Everything in room state reaches every client, so a secret word is never written in the clear.
+// Each player publishes a public key in its own entity (`pk`); a player sends its word to the
+// host sealed, and the host writes each human's word back into `secrets`, sealed to its owner.
+//   - The host checks the clues, so the host can read both words. Fine for friends, not cheat-proof.
+//   - A new host can't open boxes the old host sealed, so every player re-sends its own word
+//     to the new host (sealed, with mp.send).
+//   - crypto.subtle needs https or localhost. Offline you are the host and there is nobody to
+//     hide from, so seal()/open() pass the value through.
+const b64 = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf)));
+const unb64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+const Seal = {
+  pair: null,
+  pub: "",
+  keys: new Map(), // other player's public key -> derived AES key
+  get on() { return !!(window.crypto && crypto.subtle); },
+  /** Make this player's key pair. Returns the public key to publish: me.set("pk", pub). */
+  async init() {
+    if (!this.on) return "";
+    this.pair = await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, false, ["deriveKey"]);
+    this.pub = b64(await crypto.subtle.exportKey("raw", this.pair.publicKey));
+    return this.pub;
+  },
+  async key(otherPub) {
+    let k = this.keys.get(otherPub);
+    if (!k) {
+      const theirs = await crypto.subtle.importKey("raw", unb64(otherPub), { name: "ECDH", namedCurve: "P-256" }, false, []);
+      k = await crypto.subtle.deriveKey({ name: "ECDH", public: theirs }, this.pair.privateKey, { name: "AES-GCM", length: 128 }, false, ["encrypt", "decrypt"]);
+      this.keys.set(otherPub, k);
+    }
+    return k;
+  },
+  /** Seal any JSON value so only the holder of `toPub` (and you) can open it. */
+  async seal(toPub, value) {
+    if (!this.on || !toPub || !this.pair) return "p:" + JSON.stringify(value);
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, await this.key(toPub), new TextEncoder().encode(JSON.stringify(value)));
+    return b64(iv) + "." + b64(ct);
+  },
+  /** Open a box sealed by the player whose public key is `fromPub`. Null if it isn't for you. */
+  async open(fromPub, box) {
+    if (typeof box !== "string") return null;
+    if (box.startsWith("p:")) return JSON.parse(box.slice(2));
+    if (!this.on || !fromPub || !this.pair) return null;
+    try {
+      const [iv, ct] = box.split(".").map(unb64);
+      const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, await this.key(fromPub), ct);
+      return JSON.parse(new TextDecoder().decode(pt));
+    } catch { return null; }
+  },
+};
+
+// ── DUEL (HOST) ─────────────────────────────────────────────────────────────────────
+// The host's private memory: both secret words, the sealed boxes, intents waiting their turn.
+const host = { last: null, ready: false, since: 0, busy: false, words: [null, null], boxes: {}, botPickAt: [0, 0], think: null, inbox: [], known: new Map() };
+const gameMemo = { raw: undefined, g: null };
+/** The game as state has it, or the host's own newer write that hasn't come back yet. */
+function game() {
+  if (gameMemo.raw !== S.shared.game) { gameMemo.raw = S.shared.game; gameMemo.g = parse(S.shared.game, null); }
+  const g = gameMemo.g;
+  return host.last && isHost() && (!g || host.last.v > g.v) ? host.last : g;
+}
+function writeGame(g) { g = { ...g, v: (game()?.v ?? 0) + 1 }; host.last = g; net.setShared("game", JSON.stringify(g)); return g; }
+const seatOf = (g, id) => (g ? g.seats.findIndex((s) => s.i === id) : -1);
+const canSit = (id) => net.offline || !Seal.on || (id === net.sessionId ? !!Seal.pub : !!S.entities.players[id]?.pk);
+const pick = (a) => a[Math.floor(Math.random() * a.length)];
+const rnd = (a, b) => a + Math.random() * (b - a);
+
+/** Seal each listed seat's word to its owner into `secrets`, then write the game. */
+async function commit(g, sealSeats = []) {
+  for (const i of new Set(sealSeats)) {
+    const s = g.seats[i];
+    if (!s || s.b || !host.words[i] || (!pkOf(s.i) && Seal.on && !net.offline)) continue; // never write a word in the clear
+    host.boxes[s.i] = await Seal.seal(pkOf(s.i), { g: g.id, w: host.words[i] });
+  }
+  if (sealSeats.length) net.setShared("secrets", JSON.stringify({ g: g.id, pk: Seal.pub, box: host.boxes }));
+  return writeGame(g);
+}
+/** A new duel: the people who just played keep their seats, then whoever is waiting, then bots. */
+function newDuel(prev) {
+  const live = humans().filter(canSit);
+  const keep = prev ? prev.seats.filter((s) => !s.b && live.includes(s.i)).map((s) => s.i) : [];
+  const ids = [...keep, ...live.filter((id) => !keep.includes(id))].slice(0, 2);
+  const seats = ids.map((id) => ({ i: id, n: playerName(id), c: playerColor(id) }));
+  while (seats.length < 2) {
+    const c = COLORS.find((x) => !seats.some((s) => s.c === x)), n = pick(BOT_NAMES.filter((x) => !seats.some((s) => s.n === x)));
+    seats.push({ i: "bot" + seats.length, n, c, b: 1 });
+  }
+  host.words = seats.map((s) => (s.b ? pick(COMMON) : null));
+  host.botPickAt = seats.map(() => Date.now() + rnd(...CONFIG.botPickMs));
+  host.boxes = {}; host.think = null;
+  const t = Date.now();
+  return commit({ id: (prev?.id ?? 0) + 1, ph: "pick", host: net.sessionId, seats, first: prev ? 1 - prev.first : Math.random() < 0.5 ? 0 : 1,
+    turn: 0, t: 0, at: t, turnAt: 0, turnEnds: 0, endsAt: t + CONFIG.pickMs, locked: [false, false], rows: [[], []], final: false, last: null,
+    win: -1, why: "", reveal: null, ready: [] }, [0, 1]);
+}
+/** Pick phase: bots lock in; when time is up the host picks for anyone still choosing; then the duel starts. */
+function pickTick(g, t) {
+  const locked = g.locked.slice(), seal = [];
+  g.seats.forEach((s, i) => { if (s.b && !locked[i] && t >= host.botPickAt[i]) { host.words[i] = host.words[i] || pick(COMMON); locked[i] = true; } });
+  if (t >= g.endsAt) g.seats.forEach((s, i) => { if (!locked[i]) { host.words[i] = host.words[i] || pick(COMMON); locked[i] = true; seal.push(i); } });
+  if (locked.every(Boolean)) return commit({ ...g, locked, ph: "duel", turn: g.first, t: g.t + 1, turnAt: t + CONFIG.startMs, turnEnds: t + CONFIG.startMs + CONFIG.turnMs }, seal);
+  if (locked.some((v, i) => v !== g.locked[i])) return commit({ ...g, locked }, seal);
+}
+/** A word from a player (opened from its sealed box): lock it in during the pick phase. */
+function lockWord(g, i, w) {
+  if (g.ph !== "pick" || g.locked[i] || !ALL.has(w)) return;
+  host.words[i] = w;
+  const locked = g.locked.slice(); locked[i] = true;
+  return commit({ ...g, locked }, [i]);
+}
+/** A guess: check it, work out the clue against the rival's word, pass the turn, maybe end the duel. */
+function playGuess(g, i, w) {
+  const rows = g.rows.map((r) => r.slice()), clue = w ? score(w, host.words[1 - i]) : TIMEOUT;
+  rows[i].push([w, clue]);
+  const a = g.first, b = 1 - a, t = Date.now(), solved = clue === SOLVED;
+  const out = { ...g, rows, t: g.t + 1, last: { s: i, w, c: clue }, turnAt: t, turnEnds: t + CONFIG.turnMs };
+  if (i === a) return commit({ ...out, turn: b, final: solved }); // the first player cracked it: the other gets one last guess to tie
+  const end = (win, why) => commit({ ...out, ph: "over", win, why, reveal: host.words.slice(), endsAt: t + CONFIG.overMs, ready: [] });
+  if (solved && g.final) return end(-1, "tie");
+  if (solved) return end(b, "solved");
+  if (g.final) return end(a, "solved");
+  if (rows[i].length >= CONFIG.maxGuesses) return end(-1, "none");
+  return commit({ ...out, turn: a });
+}
+/** A bot's guess: a word that fits every clue it has, except sometimes it only minds the greens. */
+function botGuess(g, i) {
+  const mine = g.rows[i].filter((r) => r[0]);
+  if (!mine.length) return pick(OPENERS);
+  const fits = (w) => mine.every(([gw, c]) => score(gw, w) === c);
+  const greens = (w) => !mine.some((r) => r[0] === w) && mine.every(([gw, c]) => [...c].every((ch, k) => ch !== "g" || w[k] === gw[k]));
+  if (Math.random() < CONFIG.botSloppy) { const loose = COMMON.filter(greens); if (loose.length > 1) return pick(loose); }
+  const pool = COMMON.filter(fits);
+  return pick(pool.length ? pool : [...ALL].filter(fits).concat(pick(COMMON)));
+}
+/** After a host change, a bot's word is lost: pick one that fits every clue the rival already has. */
+function fitWord(g, i) {
+  const theirs = g.rows[1 - i].filter((r) => r[0]), fits = (w) => theirs.every(([gw, c]) => score(gw, w) === c);
+  const pool = COMMON.filter(fits);
+  return pick(pool.length ? pool : [...ALL].filter(fits).concat(pick(COMMON)));
+}
+/** An intent from a player (or the host's own). Only the player whose turn it is, on this exact `t`. */
+function handle({ type, from, data: d }) {
+  const g = game();
+  if (!g || !d || d.g !== g.id) return;
+  const i = seatOf(g, from);
+  if (i < 0) return;
+  if (type === "word") return lockWord(g, i, String(d.w || "").toLowerCase());
+  if (type === "again") return g.ph === "over" && !g.ready.includes(from) ? writeGame({ ...g, ready: [...g.ready, from],
+    endsAt: g.seats.every((s) => s.b || s.i === from || g.ready.includes(s.i)) ? Math.min(g.endsAt, Date.now() + 1200) : g.endsAt }) : undefined;
+  if (type === "guess" && g.ph === "duel" && i === g.turn && d.t === g.t && Date.now() >= g.turnAt - 300) {
+    const w = String(d.w || "").toLowerCase();
+    if (ALL.has(w) && !g.rows[i].some((r) => r[0] === w)) return playGuess(g, i, w);
+  }
+}
+/** Someone gone hands their seat to a bot (which must know their word); in the pick phase a waiting player takes a bot's seat. */
+function fixSeats(g) {
+  const waiting = humans().filter((id) => canSit(id) && seatOf(g, id) < 0), seats = g.seats.slice(), locked = g.locked.slice(), seal = [];
+  let changed = false;
+  seats.forEach((s, i) => {
+    if (!s.b && !stillHere(s.i)) {
+      seats[i] = { ...s, i: `bot-${g.id}-${i}`, n: s.n + " (bot)", b: 1 }; changed = true;
+      if (g.ph === "pick" && !locked[i]) { host.words[i] = pick(COMMON); host.botPickAt[i] = Date.now() + rnd(...CONFIG.botPickMs); }
+      else if (!host.words[i]) host.words[i] = fitWord(g, i);
+    } else if (s.b && g.ph === "pick" && waiting.length && !ATTRACT) {
+      const id = waiting.shift();
+      seats[i] = { i: id, n: playerName(id), c: playerColor(id) }; locked[i] = false; host.words[i] = null; changed = true;
+    }
+  });
+  return changed ? commit({ ...g, seats, locked, endsAt: g.ph === "pick" ? Math.max(g.endsAt, Date.now() + 15000) : g.endsAt }, seal) : null;
+}
+/** Just became host mid-duel: wait for the players' re-sent words, then carry on from state. */
+function adopt(g, now) {
+  if (!g || g.ph === "over" || (g.host === net.sessionId && host.words.every((w, i) => w || !g.locked[i]))) { host.ready = true; return; }
+  const mine = seatOf(g, net.sessionId);
+  if (mine >= 0 && myWord.g === g.id && myWord.w) host.known.set(mine, myWord.w);
+  const need = (i) => g.ph === "duel" || g.locked[i];
+  const missing = g.seats.some((s, i) => !s.b && stillHere(s.i) && need(i) && !host.known.has(i));
+  if (missing && now - host.since < CONFIG.rejoinMs * (g.ph === "duel" ? 2 : 1)) return;
+  host.words = g.seats.map((s, i) => host.known.get(i) || (need(i) ? fitWord(g, i) : null));
+  host.botPickAt = g.seats.map(() => Date.now() + rnd(...CONFIG.botPickMs));
+  host.boxes = {}; host.known.clear(); host.ready = true; host.think = null; host.busy = true;
+  const reseal = g.seats.map((s, i) => (!s.b && host.words[i] ? i : -1)).filter((i) => i >= 0);
+  commit({ ...g, host: net.sessionId, turnAt: g.ph === "duel" ? Math.max(g.turnAt, Date.now() - CONFIG.turnMs + 8000) : g.turnAt,
+    turnEnds: g.ph === "duel" ? Math.max(g.turnEnds, Date.now() + 8000) : g.turnEnds }, reseal).finally(() => { host.busy = false; });
+}
+function hostTick(now) {
+  if (!host.since) host.since = now;
+  if (host.busy) return;
+  const g = game(), t = Date.now();
+  if (!host.ready) return adopt(g, now);
+  const run = (p) => { if (!p) return; host.busy = true; Promise.resolve(p).catch((e) => console.warn(e)).finally(() => { host.busy = false; }); };
+  if (host.inbox.length) return run(handle(host.inbox.shift()));
+  if (!g) return run(newDuel(null));
+  if (g.ph === "over") { if (t > g.endsAt) run(newDuel(g)); return; }
+  const seatChange = fixSeats(g);
+  if (seatChange) return run(seatChange);
+  if (g.ph === "pick") return run(pickTick(g, t));
+  const s = g.seats[g.turn];
+  if (s.b && t >= g.turnAt) {
+    if (!host.think || host.think.t !== g.t) host.think = { t: g.t, at: g.turnAt + rnd(...CONFIG.botMs) };
+    if (t >= host.think.at) return run(playGuess(g, g.turn, botGuess(g, g.turn)));
+  }
+  if (t > g.turnEnds) run(playGuess(g, g.turn, "")); // out of time: that guess is lost
+}
+function stopHosting() { if (!host.since) return; Object.assign(host, { ready: false, since: 0, busy: false, last: null, inbox: [] }); host.known.clear(); }
+
+// ── ME ──────────────────────────────────────────────────────────────────────────────
+let myName = "", myColor = COLORS[0], dropped = false;
+try { myName = localStorage.getItem("mpa-name") || ""; } catch {}
+if (!myName) { myName = pick(NAME_A) + " " + pick(NAME_B); try { localStorage.setItem("mpa-name", myName); } catch {} }
+const myWord = { g: -1, w: "" };   // my secret for duel g (set when I lock it in, confirmed from `secrets`)
+let draft = [], pickDraft = [], sentT = "", sentAt = 0, lastTy = -1, secretsRaw = null, opening = false, lastResend = 0;
+/** My word from my sealed box in `secrets` (the host may have picked it for me). */
+function readMyWord(g) {
+  const raw = S.shared.secrets;
+  if (raw === secretsRaw || opening) return;
+  const R = parse(raw, null), box = R && R.g === g.id && R.box ? R.box[net.sessionId] : null;
+  if (!box) { if (!R || R.g === g.id) secretsRaw = raw; return; }
+  opening = true;
+  Seal.open(R.pk, box).then((v) => { secretsRaw = raw; if (v && v.g === g.id && v.w) { myWord.g = g.id; myWord.w = v.w; } }).finally(() => { opening = false; });
+}
+/** Send my word, sealed, to the host: to lock it in, or again after the host changed. */
+function resendWord(g, now) {
+  const hostId = livePlayers()[0], i = seatOf(g, net.sessionId), pk = pkOf(hostId);
+  if (i < 0 || myWord.g !== g.id || !myWord.w || hostId === net.sessionId || !pk || now - lastResend < 1500) return;
+  if (!((g.ph === "pick" && !g.locked[i]) || (g.ph !== "over" && g.host !== hostId))) return;
+  lastResend = now;
+  Seal.seal(pk, { g: g.id, w: myWord.w }).then((box) => net.send("word", { to: hostId, g: g.id, box }));
+}
+/** Send an intent to the host (the host queues its own). */
+function act(type, data) {
+  const g = game();
+  if (!g) return;
+  const msg = { g: g.id, t: g.t, ...data };
+  if (isHost()) host.inbox.push({ type, from: net.sessionId, data: msg }); else net.send(type, msg);
+}
+const myTurn = (g) => g.ph === "duel" && g.turn === seatOf(g, net.sessionId) && Date.now() >= g.turnAt && sentT !== g.id + ":" + g.t;
+function typeKey(k) {
+  const g = game();
+  if (!g || ATTRACT) return;
+  const i = seatOf(g, net.sessionId);
+  if (i < 0) return;
+  const buf = g.ph === "pick" ? pickDraft : g.ph === "duel" ? draft : null;
+  if (!buf) return;
+  if (k === "enter") return g.ph === "pick" ? lockIn() : submitGuess();
+  if (k === "back") { buf.pop(); popAt = -1; sound(180, 0.03); return; }
+  if (/^[a-z]$/.test(k) && buf.length < 5) { buf.push(k); popAt = buf.length - 1; sound(520 + buf.length * 40, 0.03); }
+}
+function lockIn() {
+  const g = game(), i = seatOf(g, net.sessionId), w = pickDraft.join("");
+  if (!g || g.ph !== "pick" || i < 0 || g.locked[i]) return;
+  if (w.length < 5) return reject("Your word needs 5 letters");
+  if (!ALL.has(w)) return reject("That word isn't in our list");
+  myWord.g = g.id; myWord.w = w; lastResend = 0;
+  if (isHost()) host.inbox.push({ type: "word", from: net.sessionId, data: { g: g.id, w } }); else resendWord(g, performance.now());
+  sound(660, 0.1);
+}
+function submitGuess() {
+  const g = game(), i = seatOf(g, net.sessionId), w = draft.join("");
+  if (!g || !myTurn(g)) return reject(g && g.ph === "duel" ? "Wait for your turn" : "");
+  if (w.length < 5) return reject("Not enough letters");
+  if (!ALL.has(w)) return reject("Not in the word list");
+  if (g.rows[i].some((r) => r[0] === w)) return reject("You already tried that");
+  sentT = g.id + ":" + g.t; sentAt = performance.now(); draft = [];
+  act("guess", { w });
+}
+function reject(text) {
+  if (!text) return;
+  shakeAt = performance.now(); toast(text); sound(140, 0.12);
+}
+/** ?attract: nothing to type; the duel is two bots. */
+
+// ── SCREEN ──────────────────────────────────────────────────────────────────────────
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const KEYS = ["qwertyuiop", "asdfghjkl", "+zxcvbnm-"];
+$("kbd").innerHTML = KEYS.map((r) => `<div class="kr">${[...r].map((k) => k === "+" ? '<button data-k="enter" class="wide">Enter</button>' : k === "-" ? '<button data-k="back" class="wide">⌫</button>' : `<button data-k="${k}">${k}</button>`).join("")}</div>`).join("");
+let popAt = -1, shakeAt = 0, layoutKey = "", toastTimer = 0;
+function toast(text) { const el = $("toast"); el.textContent = text; el.style.opacity = 1; clearTimeout(toastTimer); toastTimer = setTimeout(() => { el.style.opacity = 0; }, 1300); }
+/** Tile sizes from the viewport: my board big and the rival's small, or both the same when watching. */
+function fit(seated) {
+  document.documentElement.style.setProperty("--kh", Math.round(Math.max(40, Math.min(58, innerHeight * 0.066))) + "px");
+  const W = innerWidth, kb = $("kbd").hidden ? 0 : $("kbd").offsetHeight;
+  const room = innerHeight - $("arena").getBoundingClientRect().top - kb - $("hint").offsetHeight - $("net").offsetHeight - 30;
+  const ratio = !seated ? 1 : W < 600 ? 0.45 : 0.58, rows = CONFIG.maxGuesses + 0.9;
+  const byW = (Math.min(W, 820) - 40 - 46 - 8 * 5 - 24) / (5 + 5 * ratio), byH = (room - 48) / rows - 5;
+  const t = Math.max(22, Math.min(62, byW, byH));
+  document.documentElement.style.setProperty("--t", t.toFixed(1) + "px");
+  document.documentElement.style.setProperty("--m", (seated ? t * ratio : t).toFixed(1) + "px");
+}
+const tileHtml = (ch, cls = "", i = 0) => `<div class="tile ${cls}" style="--i:${i}">${ch ? esc(ch) : ""}</div>`;
+const rowHtml = (letters, cls = "", tcls = () => "") => `<div class="row ${cls}">${[0, 1, 2, 3, 4].map((k) => tileHtml(letters[k] || "", tcls(k), k)).join("")}</div>`;
+const flipped = [new Map(), new Map()]; // per board: rows already shown flipped (so a row flips once)
+/** One board: past guesses with clues, the typing row, empty rows. */
+function boardHtml(g, i) {
+  const rows = g.rows[i], out = [], key = g.id + ":" + i, seen = flipped[0].get(key) ?? (flipped[0].set(key, rows.length), rows.length);
+  rows.forEach(([w, c], r) => {
+    const fresh = r >= seen;
+    if (!w) return out.push(rowHtml(["t", "i", "m", "e", "!"], "time"));
+    out.push(rowHtml([...w], c === SOLVED && g.ph === "over" ? "won" : "", (k) => c[k] + (fresh ? " flip" : "")));
+  });
+  flipped[0].set(key, rows.length);
+  if (out.length < CONFIG.maxGuesses && g.ph === "duel" && g.turn === i) {
+    const me = g.seats[i].i === net.sessionId, s = g.seats[i];
+    if (me) out.push(rowHtml(draft, "", (k) => (k < draft.length ? "on" + (k === popAt ? " pop" : "") : "")));
+    else if (s.b) out.push(rowHtml([], Date.now() >= g.turnAt ? "think" : ""));
+    else { const n = Math.min(5, Number(S.entities.players[s.i]?.ty) || 0); out.push(rowHtml([], "", (k) => (k < n ? "on dots" : ""))); }
+  }
+  while (out.length < CONFIG.maxGuesses) out.push(rowHtml([]));
+  return out.join("");
+}
+/** A secret word strip: mine shows my letters and lights the ones my rival has found; theirs shows only what I've found. */
+function secretHtml(g, owner, viewerSeat) {
+  const found = [0, 1, 2, 3, 4].map((k) => g.rows[1 - owner].find((r) => r[1][k] === "g")?.[0][k] || "");
+  const word = g.ph === "over" && g.reveal ? g.reveal[owner] : ATTRACT ? host.words[owner] || "" : owner === viewerSeat && myWord.g === g.id ? myWord.w : "";
+  const label = owner === viewerSeat ? "Your word" : esc(g.seats[owner].n.replace(" (bot)", "")) + "'s word";
+  return `<span>${label}</span>` + [0, 1, 2, 3, 4].map((k) => {
+    const ch = word ? word[k] : found[k];
+    return tileHtml(ch || "?", found[k] ? "found" : word ? "" : "hidden", k);
+  }).join("");
+}
+/** Keyboard colors from my own guesses: green beats yellow beats grey. */
+function keyStates(g, i) {
+  const st = {};
+  for (const [w, c] of g.rows[i] || []) {
+    if (!w) continue; // a lost (timed-out) guess
+    for (let k = 0; k < 5; k++) { const now = st[w[k]], v = c[k]; if (v === "g" || (v === "y" && now !== "g") || (v === "b" && !now)) st[w[k]] = v; }
+  }
+  return st;
+}
+let lastSig = "";
+function render(g, now) {
+  const i = seatOf(g, net.sessionId), seated = i >= 0 && !ATTRACT, L = seated ? i : 0, R = 1 - L;
+  $("kbd").hidden = !seated; // watchers (and the ?attract preview) get bigger boards instead
+  const lk = seated + ":" + innerWidth + "x" + innerHeight + ":" + $("kbd").hidden + ":" + $("hint").offsetHeight;
+  if (lk !== layoutKey) { layoutKey = lk; fit(seated); }
+  const picking = g.ph === "pick";
+  $("pick").hidden = !picking; $("sideL").style.visibility = $("sideR").style.visibility = $("vs").style.visibility = picking ? "hidden" : "visible";
+  // status line + timer
+  const t = Date.now(), you = (s) => (s === i && seated ? "You" : esc(g.seats[s].n)), turnS = g.turn;
+  let st = "", left = 0, span = 1;
+  if (picking) { st = seated ? (g.locked[i] ? `Locked in. Waiting for ${esc(g.seats[R].n)}…` : `${Math.max(0, Math.ceil((g.endsAt - t) / 1000))}s to choose`) : "Both players are picking a secret word…"; left = g.endsAt - t; span = CONFIG.pickMs; }
+  else if (g.ph === "duel") {
+    left = g.turnEnds - t; span = CONFIG.turnMs;
+    if (t < g.turnAt) st = `Duel! <span class="${turnS === L ? "me" : "rival"}">${you(turnS)}</span> ${turnS === i && seated ? "go" : "goes"} first`;
+    else if (seated && turnS === i) st = g.final ? `<span class="rival">${esc(g.seats[R].n)}</span> cracked it! Guess now to tie` : `Your turn: guess <span class="rival">${esc(g.seats[R].n)}</span>'s word`;
+    else if (seated) st = `<span class="rival">${esc(g.seats[R].n)}</span> is guessing your word…`;
+    else st = `<span class="${turnS === L ? "me" : "rival"}">${esc(g.seats[turnS].n)}</span> is guessing`;
+  } else if (g.ph === "over") { st = g.win < 0 ? "Draw!" : seated ? (g.win === i ? "You win!" : `${esc(g.seats[g.win].n)} wins`) : `${esc(g.seats[g.win].n)} wins`; left = g.endsAt - t; span = CONFIG.overMs; }
+  if ($("stText").innerHTML !== st) $("stText").innerHTML = st;
+  $("timer").style.visibility = g.ph === "over" || (g.ph === "duel" && t < g.turnAt) ? "hidden" : "visible";
+  $("timer").firstElementChild.style.transform = `scaleX(${Math.max(0, Math.min(1, left / span))})`;
+  // boards (rebuilt only when something on them changes)
+  const ty = S.entities.players[g.seats[R].i]?.ty;
+  const sig = [g.id, g.v, g.ph, i, draft.join(""), popAt, ty, myWord.w, t >= g.turnAt, ATTRACT && host.words.join()].join("|");
+  if (sig !== lastSig) {
+    lastSig = sig;
+    for (const [el, s] of [[$("sideL"), L], [$("sideR"), R]]) {
+      const isMe = seated && s === i;
+      el.querySelector(".who").innerHTML = `<span class="dot" style="background:${esc(g.seats[s].c)}"></span>${isMe ? "You" : esc(g.seats[s].n)}${g.seats[s].b ? " 🤖" : ""} · ${g.rows[s].length}/${CONFIG.maxGuesses}`;
+      el.querySelector(".secret").innerHTML = secretHtml(g, 1 - s, seated ? i : -1);
+      el.querySelector(".grid").innerHTML = boardHtml(g, s);
+      el.querySelector(".grid").classList.toggle("mini", seated && s !== i);
+      el.classList.toggle("turn", g.ph === "duel" && g.turn === s);
+    }
+    popAt = -1;
+    const ks = keyStates(g, seated ? i : 0);
+    for (const b of $("kbd").querySelectorAll("button[data-k]")) b.className = (b.dataset.k.length > 1 ? "wide " : "") + (ks[b.dataset.k] || "");
+  }
+  if (now - shakeAt < 380) { const row = (picking ? $("pickRow") : $("sideL").querySelector(".grid .row:not(:has(.g,.y,.b))")); if (row && !row.classList.contains("shake")) { row.classList.add("shake"); setTimeout(() => row.classList.remove("shake"), 380); } }
+  if (picking) renderPick(g, i, seated);
+  const n = livePlayers().length;
+  $("net").textContent = ATTRACT ? "" : net.offline ? "Offline: playing with bots" : dropped ? "Reconnecting…" : `Online · ${n} player${n === 1 ? "" : "s"}${isHost() ? " · you run the duel" : ""}`;
+  $("hint").textContent = ATTRACT ? "" : !seated ? (g.ph === "over" ? "" : "You're watching. You'll get a seat when one is free.")
+    : picking ? "Your rival will try to guess it. Green = right spot, yellow = in the word, grey = not in it."
+    : g.ph === "duel" && g.rows[i].length === 0 ? "Type a 5-letter word and press Enter. Fewest guesses wins." : "";
+  if (seated && g.ph === "duel") { const n2 = myTurn(g) ? draft.length : 0; if (n2 !== lastTy) { lastTy = n2; net.me.set("ty", n2); } }
+}
+function renderPick(g, i, seated) {
+  const R = 1 - Math.max(0, i), locked = seated && g.locked[i], w = locked && myWord.g === g.id ? myWord.w : pickDraft.join("");
+  $("pickTitle").textContent = !seated ? "Picking secret words…" : locked ? "Your secret word" : "Pick your secret word";
+  $("pickSub").innerHTML = seated ? `<b style="color:${esc(g.seats[R].c)}">${esc(g.seats[R].n)}</b> will try to guess it. Pick a real 5-letter word.` : `${esc(g.seats[0].n)} vs ${esc(g.seats[1].n)}`;
+  const html = rowHtml(seated ? [...w] : [], "", (k) => (k < w.length ? (locked ? "g" : "on") : ""));
+  if ($("pickRow").innerHTML !== html) $("pickRow").innerHTML = html;
+  $("pickBtns").hidden = !seated || locked;
+  const other = g.locked[R] ? `${esc(g.seats[R].n)} is ready ✓` : `${esc(g.seats[R].n)} is choosing…`;
+  const html2 = seated ? other : "";
+  if ($("pickStatus").innerHTML !== html2) $("pickStatus").innerHTML = html2;
+}
+/** Sounds and confetti when something lands in state (effects only). */
+let seenT = "", seenPh = "";
+function effects(g) {
+  const key = g.id + ":" + g.t, first = !seenT;
+  if (key !== seenT) {
+    seenT = key;
+    if (!first && g.last) { const c = g.last.c; for (let k = 0; k < 5; k++) setTimeout(() => sound(c[k] === "g" ? 880 : c[k] === "y" ? 660 : 330, 0.05), 230 + k * 110); }
+  }
+  const ph = g.id + ":" + g.ph;
+  if (ph !== seenPh) {
+    const was = seenPh; seenPh = ph;
+    if (!was) return;
+    if (g.ph === "pick") { draft = []; pickDraft = []; sentT = ""; flipped[0].clear(); }
+    if (g.ph === "over") {
+      const i = seatOf(g, net.sessionId);
+      if (g.win >= 0) setTimeout(() => confetti(g.win === (i >= 0 && !ATTRACT ? i : 0) ? $("sideL") : $("sideR")), 700);
+      sound(g.win >= 0 && g.win === i ? 784 : 330, 0.3);
+    }
+  }
+}
+const fx = $("fx"), fxc = fx.getContext("2d"), bits = [];
+function confetti(el) { const r = el.getBoundingClientRect(); for (let k = 0; k < 110; k++) bits.push({ x: r.left + r.width / 2, y: r.top + r.height * 0.4, vx: (Math.random() - 0.5) * 520, vy: -200 - Math.random() * 420, c: ["#3fbf6b", "#e6b437", "#4cc3ff", "#ff8a5c", "#fff"][k % 5], r: Math.random() * 6, life: 1.8 }); }
+function drawFx(dt) {
+  const dpr = Math.min(2, devicePixelRatio || 1);
+  if (fx.width !== Math.round(innerWidth * dpr) || fx.height !== Math.round(innerHeight * dpr)) { fx.width = Math.round(innerWidth * dpr); fx.height = Math.round(innerHeight * dpr); }
+  fxc.setTransform(dpr, 0, 0, dpr, 0, 0); fxc.clearRect(0, 0, innerWidth, innerHeight);
+  for (let k = bits.length - 1; k >= 0; k--) {
+    const b = bits[k]; b.life -= dt; b.vy += 700 * dt; b.x += b.vx * dt; b.y += b.vy * dt; b.r += dt * 8;
+    if (b.life <= 0) { bits.splice(k, 1); continue; }
+    fxc.save(); fxc.translate(b.x, b.y); fxc.rotate(b.r); fxc.fillStyle = b.c; fxc.globalAlpha = Math.min(1, b.life); fxc.fillRect(-4, -2.5, 8, 5); fxc.restore();
+  }
+}
+let actx = null; // sounds start after the first tap or key (browsers require it)
+function unlockAudio() { if (!actx && !ATTRACT) try { actx = new AudioContext(); } catch {} }
+function sound(freq, len) {
+  if (!actx) return;
+  const t = actx.currentTime, o = actx.createOscillator(), gn = actx.createGain();
+  o.type = "triangle"; o.frequency.setValueAtTime(freq, t);
+  gn.gain.setValueAtTime(0.12, t); gn.gain.exponentialRampToValueAtTime(0.001, t + len + 0.08);
+  o.connect(gn).connect(actx.destination); o.start(t); o.stop(t + len + 0.1);
+}
+
+// ── RESULTS ─────────────────────────────────────────────────────────────────────────
+let board = null, resultsFor = -1;
+function results(g) {
+  $("over").hidden = g.ph !== "over" || ATTRACT;
+  if (g.ph !== "over") return;
+  $("oNext").textContent = `Next duel in ${Math.max(0, Math.ceil((g.endsAt - Date.now()) / 1000))}s`;
+  $("again").textContent = g.ready.includes(net.sessionId) ? "Ready ✓" : "Play again";
+  if (resultsFor === g.id) return;
+  resultsFor = g.id;
+  const i = seatOf(g, net.sessionId), won = i >= 0 && g.win === i, n = (s) => g.rows[s].length;
+  $("oTitle").textContent = g.win < 0 ? "Draw!" : won ? "You win!" : `${g.seats[g.win].n} wins`;
+  $("oSub").textContent = g.why === "tie" ? `Both cracked it in ${n(0)} guesses.` : g.why === "none" ? "Nobody cracked the other's word." :
+    `${won ? "You" : g.seats[g.win].n} cracked it in ${n(g.win)} guess${n(g.win) === 1 ? "" : "es"}.`;
+  $("oWords").innerHTML = g.seats.map((s, k) => `<div class="wl">${k === i ? "Your word" : esc(s.n) + "'s word"}</div>` + rowHtml([...(g.reveal?.[k] || "?????")], "", () => (g.rows[1 - k].some((r) => r[1] === SOLVED) ? "g" : "b"))).join("");
+  $("again").hidden = i < 0;
+  const list = $("board");
+  if (!board) { list.innerHTML = "<li>Leaderboards need a connection.</li>"; return; }
+  list.innerHTML = "<li>Loading…</li>";
+  (won ? board.submit(1, "inc").catch(() => null) : Promise.resolve()).then(() => board.top(10)).then(({ entries }) => {
+    list.innerHTML = entries.length ? entries.map((e) => `<li>${esc(e.username || "Player")}<span>${e.score}</span></li>`).join("") : "<li>No wins yet. Be the first.</li>";
+  }).catch(() => { list.innerHTML = "<li>Couldn't load the leaderboard.</li>"; });
+}
+
+// ── INPUT ───────────────────────────────────────────────────────────────────────────
+$("kbd").addEventListener("pointerdown", (e) => { const b = e.target.closest("button[data-k]"); if (!b) return; e.preventDefault(); unlockAudio(); typeKey(b.dataset.k); });
+addEventListener("keydown", (e) => {
+  if (e.target === $("name") || e.ctrlKey || e.metaKey || e.altKey) return;
+  unlockAudio();
+  const k = e.key === "Enter" ? "enter" : e.key === "Backspace" ? "back" : e.key.toLowerCase();
+  if (k === "enter" || k === "back" || /^[a-z]$/.test(k)) { e.preventDefault(); typeKey(k); }
+});
+$("rand").addEventListener("click", () => { unlockAudio(); pickDraft = [...pick(COMMON)]; sound(440, 0.05); });
+$("lock").addEventListener("click", () => { unlockAudio(); lockIn(); });
+$("again").addEventListener("click", () => act("again", {}));
+$("name").value = myName;
+$("name").addEventListener("change", () => {
+  myName = $("name").value.trim().slice(0, 14) || myName;
+  try { localStorage.setItem("mpa-name", myName); } catch {}
+  net && net.me.set("n", myName);
+});
+document.addEventListener("touchmove", (e) => { if (!e.target.closest(".card")) e.preventDefault(); }, { passive: false });
+addEventListener("resize", () => { layoutKey = ""; });
+
+// ── MAIN LOOP ───────────────────────────────────────────────────────────────────────
+/** Colors already in use: other players', and the bots' at the table. */
+function takenColors() {
+  const g = game(), bots = g && seatOf(g, net.sessionId) < 0 ? g.seats.filter((s) => s.b).map((s) => s.c) : [];
+  return new Set([...Object.entries(S.entities.players || {}).filter(([id]) => id !== net.sessionId).map(([, p]) => p.c), ...bots]);
+}
+/** Two people joined at once in one color, or mine is a bot's: pick a free one (the later sessionId moves). */
+function fixColor() {
+  const g = game(), others = Object.entries(S.entities.players || {}).filter(([id]) => id !== net.sessionId);
+  const clash = others.some(([id, p]) => p.c === myColor && id < net.sessionId) || (g && seatOf(g, net.sessionId) < 0 && g.seats.some((s) => s.b && s.c === myColor));
+  if (!clash) return;
+  const taken = takenColors(), free = COLORS.find((c) => !taken.has(c));
+  if (free) { myColor = free; net.me.set("c", free); }
+}
+let lastHb = 0, last = performance.now();
+function frame(now) {
+  const dt = Math.max(0, Math.min(0.05, (now - last) / 1000)); last = now;
+  if (now - lastHb > 1000) { lastHb = now; net.me.set("hb", Date.now()); fixColor(); }
+  if (isHost()) hostTick(now); else stopHosting();
+  const g = game();
+  if (g) { readMyWord(g); resendWord(g, now); effects(g); render(g, now); results(g); }
+  if (g && sentT && performance.now() - sentAt > 4000 && sentT === g.id + ":" + g.t) sentT = ""; // a guess lost in a host change: let me send again
+  drawFx(dt);
+  requestAnimationFrame(frame);
+}
+
+(async function start() {
+  if (ATTRACT) { Object.assign(CONFIG, { pickMs: 900, startMs: 500, botPickMs: [200, 600], botMs: [650, 950], overMs: 2600, botSloppy: 0.45 }); $("name").style.display = "none"; }
+  net = await connect();
+  net.onState((st) => { S = st; });
+  for (const type of ["guess", "again"]) net.on(type, (data, from) => { if (isHost() && data) host.inbox.push({ type, from, data }); });
+  net.on("word", (d, from) => { // a player's secret word, sealed to me (the host)
+    if (!d || d.to !== net.sessionId) return;
+    Seal.open(pkOf(from), d.box).then((v) => {
+      const g = game(), i = seatOf(g, from);
+      if (!v || !g || v.g !== g.id || i < 0 || !isHost()) return;
+      if (!host.ready) host.known.set(i, String(v.w).toLowerCase()); else host.inbox.push({ type: "word", from, data: v });
+    });
+  });
+  net.onDisconnect(() => { dropped = true; $("net").textContent = "Reconnecting…"; });
+  net.onReconnect(() => { dropped = false; });
+  if (!net.offline && typeof MP !== "undefined") board = MP.auth({ key: MP_CONNECT.key, apiUrl: MP_CONNECT.apiUrl }).leaderboard(CONFIG.board);
+  const taken = takenColors();
+  myColor = COLORS.find((c) => !taken.has(c)) || pick(COLORS);
+  const pk = await Seal.init().catch(() => "");
+  net.me.set({ n: myName, c: myColor, pk, hb: Date.now(), ty: 0 });
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
