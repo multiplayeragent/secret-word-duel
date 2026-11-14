@@ -26,6 +26,8 @@
   .who, .secret { width: 0; min-width: 100%; } /* the board sets each side's width; labels never widen it */
   .who { font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center; }
   .who .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; vertical-align: 0; }
+  .who .cnt::before { content: " · "; }
+  .side:has(.grid.mini) .who .cnt { display: block; } .side:has(.grid.mini) .who .cnt::before { content: ""; } /* the small board: count on its own line */
   .side.turn .who { color: #fff; }
   .side.turn .grid { box-shadow: 0 0 0 2px #ffffff40, 0 0 26px #ffffff1c; }
   .grid { display: flex; flex-direction: column; gap: var(--gap); padding: 6px; border-radius: 12px; background: #0000002e; transition: box-shadow .3s; }
@@ -77,6 +79,7 @@
   .words .row .tile { --s: 34px; }
   .card h3 { margin: 6px 0 0; font-size: 13px; color: var(--yellow); text-align: left; }
   .card ol { text-align: left; padding-left: 26px; margin: 6px 0 12px; font-size: 14px; min-height: 30px; } .card li span { float: right; }
+  .card li.note { list-style: none; opacity: .75; }
   #oNext { color: var(--dim); font-size: 13px; margin-top: 6px; }
   @media (max-width: 520px) { header h1 { font-size: 16px; } #name { width: 104px; } #vs { width: 30px; height: 30px; font-size: 11px; } #arena { gap: 6px; } }
 </style>
@@ -107,7 +110,7 @@
 <div id="over" hidden><div class="card">
   <h2 id="oTitle"></h2><p id="oSub"></p>
   <div class="words" id="oWords"></div>
-  <h3>Most duels won</h3><ol id="board"><li>Loading…</li></ol>
+  <h3>Most duels won</h3><ol id="board"><li class="note">Loading…</li></ol>
   <button class="go" id="again">Play again</button><div id="oNext"></div>
 </div></div>
 <script>
@@ -231,7 +234,24 @@ tease tempo tense tenth tepid terse theme there these those threw thump thyme ti
 topic totem toxic trace tramp trash trawl tread trial tribe tried trite troll troop trout truce truly tubby tuner tweak twice twine
 twirl ultra umbra unify union unity unzip upset usage usher utter vague valve vault vegan venom venue verse vicar vigor vinyl viola
 viper viral virus visor vista vixen vocal vouch voter wacky wafer waste waver weary wedge weird whack where which whiff whine whirl
-whose widen width wield wince winch windy wispy woken woody wordy worse worst would wound woven wrath wreck wrote yearn yield zesty`.trim().split(/\s+/);
+whose widen width wield wince winch windy wispy woken woody wordy worse worst would wound woven wrath wreck wrote yearn yield zesty
+abide abode acres acted added aided aimed aired asked aster baked based basil began begun birds blues boats boils bones books bored
+boxes bribe brute canal cards cared cares chime chips claws cloak coder coils coins comes crept cried cubes cured curse dared denim
+dined dolly doors doted dozed ducks dummy dunes dying eased eater ended faced faces faded fared farms feral fined fired fires fists
+flags flies flown foods frogs games gazed ghoul girls gives gland glyph goals going goods grime guild gusto hands hated hater havoc
+heady heard helps hiker hills hired hoard holes homes hooks hoped hopes hours islet items joked jokes keeps kinds kings kites knees
+knows lakes lamps lands leads leash lemur liked lined lines lists lived lives locks looks loopy loser lousy loves lured lyric makes
+masks mated meals mealy means meant miles mimic minds mined miner moved mover moves mummy nails named nasal needs nests ninth noisy
+nosed noted notes oiled older opens ovary owned paced paged pages paled pared parts paths piled pined pipes plait plans plays pluck
+plumb poach poems poked pools ports posed poser posse prawn proxy psalm pudgy pulls quake quart quell queue rabbi raced racer radii
+raged rails raked rarer raspy rated rates raved reads rerun revel risen riser roach robes rocks roofs roost roots ropes roses rover
+ruled rules runny sails sales salvo saner sassy sated satin saved saver scalp scare scoff scold seeds seems sends serum sever shawl
+ships shoes shops shows sided sides signs sites sized skimp slain slosh slots slush smock snide snipe snoop snort socks soggy soils
+songs sorts soups spiel spilt split spoil squib stars stays stead steps stile stint stony stops suede swath taint taker takes tales
+talks talon tamed tamer tangy tanks taped tares teams tears tells tenet tents terms tests texts theft their throb tibia tiled timed
+times titan toils toned toner tools torso toted tract trees tries trope tuned tunic turns tweed typed types udder uncut unfit units
+unlit users using valor verge views vigil vines vogue vowed vowel waded wader waged wager walls wants waved waves weedy weeks wings
+wiped wiper wired wiser wives words works wrung yards years yells yours zones`.trim().split(/\s+/);
 const ALL = new Set([...COMMON, ...EXTRA]);
 const OPENERS = ["crane", "slate", "trace", "stare", "arise", "raise", "audio", "house", "plant", "heart", "least", "coast"];
 /** The clue for a guess against a secret: "g" right spot, "y" in the word elsewhere, "b" not in it. */
@@ -661,7 +681,7 @@ function render(g, now) {
     lastSig = sig;
     for (const [el, s] of [[$("sideL"), L], [$("sideR"), R]]) {
       const isMe = seated && s === i;
-      el.querySelector(".who").innerHTML = `<span class="dot" style="background:${esc(g.seats[s].c)}"></span>${isMe ? "You" : esc(g.seats[s].n)}${g.seats[s].b ? " 🤖" : ""} · ${g.rows[s].length}/${CONFIG.maxGuesses}`;
+      el.querySelector(".who").innerHTML = `<span class="dot" style="background:${esc(g.seats[s].c)}"></span>${isMe ? "You" : esc(g.seats[s].n)}${g.seats[s].b ? " 🤖" : ""}<span class="cnt">${g.rows[s].length}/${CONFIG.maxGuesses}</span>`;
       el.querySelector(".secret").innerHTML = secretHtml(g, 1 - s, seated ? i : -1);
       el.querySelector(".grid").innerHTML = boardHtml(g, s);
       el.querySelector(".grid").classList.toggle("mini", seated && s !== i);
@@ -724,7 +744,8 @@ function drawFx(dt) {
   }
 }
 let actx = null; // sounds start after the first tap or key (browsers require it)
-function unlockAudio() { if (!actx && !ATTRACT) try { actx = new AudioContext(); } catch {} }
+function unlockAudio() { if (actx && actx.state === "suspended") actx.resume().catch(() => {}); if (!actx && !ATTRACT) try { actx = new AudioContext(); } catch {} }
+addEventListener("pointerdown", unlockAudio); // any first tap starts sound (Play again, Random word, the boards)
 function sound(freq, len) {
   if (!actx) return;
   const t = actx.currentTime, o = actx.createOscillator(), gn = actx.createGain();
@@ -749,11 +770,11 @@ function results(g) {
   $("oWords").innerHTML = g.seats.map((s, k) => `<div class="wl">${k === i ? "Your word" : esc(s.n) + "'s word"}</div>` + rowHtml([...(g.reveal?.[k] || "?????")], "", () => (g.rows[1 - k].some((r) => r[1] === SOLVED) ? "g" : "b"))).join("");
   $("again").hidden = i < 0;
   const list = $("board");
-  if (!board) { list.innerHTML = "<li>Leaderboards need a connection.</li>"; return; }
-  list.innerHTML = "<li>Loading…</li>";
+  if (!board) { list.innerHTML = "<li class=\"note\">Leaderboards need a connection.</li>"; return; }
+  list.innerHTML = "<li class=\"note\">Loading…</li>";
   (won ? board.submit(1, "inc").catch(() => null) : Promise.resolve()).then(() => board.top(10)).then(({ entries }) => {
-    list.innerHTML = entries.length ? entries.map((e) => `<li>${esc(e.username || "Player")}<span>${e.score}</span></li>`).join("") : "<li>No wins yet. Be the first.</li>";
-  }).catch(() => { list.innerHTML = "<li>Couldn't load the leaderboard.</li>"; });
+    list.innerHTML = entries.length ? entries.map((e) => `<li>${esc(e.username || "Player")}<span>${e.score}</span></li>`).join("") : "<li class=\"note\">No wins yet. Be the first.</li>";
+  }).catch(() => { list.innerHTML = "<li class=\"note\">Couldn't load the leaderboard.</li>"; });
 }
 
 // ── INPUT ───────────────────────────────────────────────────────────────────────────
